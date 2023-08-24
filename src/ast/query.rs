@@ -209,6 +209,8 @@ pub struct Select {
     pub into: Option<SelectInto>,
     /// FROM
     pub from: Vec<TableWithJoins>,
+    /// PARTITION
+    pub partitions: Vec<Expr>,
     /// LATERAL VIEWs
     pub lateral_views: Vec<LateralView>,
     /// WHERE

@@ -5567,6 +5567,19 @@ impl<'a> Parser<'a> {
             vec![]
         };
 
+        let partitions =
+            if dialect_of!(self is MySqlDialect) && self.parse_keyword(Keyword::PARTITION) {
+                let mut partitions = self.parse_comma_separated(|p| p.parse_tuple(true, false))?;
+                if partitions.len() != 1 {
+                    return Err(ParserError::ParserError(format!(
+                        "Partition expect one tuple"
+                    )));
+                }
+                partitions.remove(0)
+            } else {
+                vec![]
+            };
+
         let mut lateral_views = vec![];
         loop {
             if self.parse_keywords(&[Keyword::LATERAL, Keyword::VIEW]) {
@@ -5652,6 +5665,7 @@ impl<'a> Parser<'a> {
             projection,
             into,
             from,
+            partitions,
             lateral_views,
             selection,
             group_by,
@@ -8033,5 +8047,32 @@ mod tests {
             "schema.*",
             "sql parser error: Unexpected token following period in identifier: *",
         );
+    }
+
+    #[test]
+    fn test_mysql_partition_selection() {
+        let sql = "SELECT * FROM employees PARTITION (p0, p2)";
+        let ast: Vec<Statement> = Parser::parse_sql(&MySqlDialect {}, sql).unwrap();
+        assert_eq!(ast.len(), 1);
+        if let Statement::Query(v) = &ast[0] {
+            if let SetExpr::Select(select) = &*v.body {
+                let expected = vec!["p0", "p2"];
+
+                let actual: Vec<&str> = select
+                    .partitions
+                    .iter()
+                    .map(|expr| {
+                        if let Expr::Identifier(ident) = &expr {
+                            ident.value.as_str()
+                        } else {
+                            ""
+                        }
+                    })
+                    .collect();
+                assert_eq!(expected, actual);
+            }
+        } else {
+            panic!("fail to parse mysql partition selection");
+        }
     }
 }
